@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Windmill Front View Simulation</title>
+  
+  <!-- A-Frame Library -->
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <!-- AR.js for A-Frame -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* UI Overlay บนหน้าจอ */
+    #ui-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      display: none; /* แสดงเฉพาะเมื่อพบ Hiro Marker */
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 18px 24px;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      color: white;
+      min-width: 280px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      outline: none;
+      color: white;
+    }
+
+    #btn-toggle {
+      background: #10b981; /* สีเขียวเปิด */
+    }
+
+    #btn-toggle.off {
+      background: #ef4444; /* สีแดงปิด */
+    }
+
+    #btn-speed {
+      background: #3b82f6; /* สีฟ้าปรับความเร็ว */
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    .status-text {
+      font-size: 13px;
+      color: #93c5fd;
+      font-weight: 500;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- UI ควบคุมหน้าจอ -->
+  <div id="ui-container">
+    <div class="status-text" id="status-label">สถานะ: ปิดทำงาน | ความเร็ว: หยุดนิ่ง</div>
+    <div class="btn-group">
+      <button id="btn-toggle" class="off" onclick="toggleWindmill()">เปิดกังหัน</button>
+      <button id="btn-speed" onclick="changeSpeed()">ปรับความเร็ว</button>
+    </div>
+  </div>
+
+  <!-- A-Frame Scene -->
+  <a-scene 
+    embedded 
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;"
+    vr-mode-ui="enabled: false">
+
+    <!-- ตรวจจับ Hiro Marker -->
+    <a-marker preset="hiro" id="hiro-marker">
+      
+      <!-- โครงสร้างกังหันลม โดยหันหน้ากังหันออกด้านหน้า (Front View) -->
+      <a-entity id="windmill-container" position="0 0 0">
+
+        <!-- เสากังหันทรงกรวย -->
+        <a-cone position="0 0.8 0" radius-bottom="0.22" radius-top="0.1" height="1.6" color="#f8fafc" material="roughness: 0.3"></a-cone>
+        
+        <!-- ห้องเครื่องด้านบน (Nacelle) -->
+        <a-box position="0 1.6 -0.05" width="0.22" height="0.22" depth="0.3" color="#0284c7"></a-box>
+        
+        <!-- ดุมแกนหมุนกังหันหันออกด้านหน้า (Hub) -->
+        <a-cone position="0 1.6 0.12" radius-bottom="0.09" radius-top="0.02" height="0.12" rotation="90 0 0" color="#e2e8f0"></a-cone>
+
+        <!-- ชุดใบพัดกังหันหมุนด้านหน้า (Rotates on Z-Axis) -->
+        <a-entity id="blades-group" position="0 1.6 0.18">
+          
+          <!-- ใบพัดที่ 1 (ชี้ขึ้น) -->
+          <a-box position="0 0.45 0" width="0.07" height="0.8" depth="0.01" color="#ffffff"></a-box>
+          <a-circle position="0 0.85 0" radius="0.035" color="#ffffff"></a-circle>
+          
+          <!-- ใบพัดที่ 2 (ทำมุม 120 องศา) -->
+          <a-entity rotation="0 0 120">
+            <a-box position="0 0.45 0" width="0.07" height="0.8" depth="0.01" color="#ffffff"></a-box>
+            <a-circle position="0 0.85 0" radius="0.035" color="#ffffff"></a-circle>
+          </a-entity>
+
+          <!-- ใบพัดที่ 3 (ทำมุม 240 องศา) -->
+          <a-entity rotation="0 0 240">
+            <a-box position="0 0.45 0" width="0.07" height="0.8" depth="0.01" color="#ffffff"></a-box>
+            <a-circle position="0 0.85 0" radius="0.035" color="#ffffff"></a-circle>
+          </a-entity>
+
+        </a-entity>
+
+      </a-entity>
+
+    </a-marker>
+
+    <!-- Camera -->
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    let isRunning = false;
+    let currentSpeedIndex = 0;
+
+    // กำหนดระดับความเร็ว (ระยะเวลาต่อรอบในหน่วยมิลลิวินาที)
+    const speeds = [
+      { name: 'รอบช้า', duration: 3500 },
+      { name: 'รอบปานกลาง', duration: 1800 },
+      { name: 'รอบเร็ว', duration: 700 }
+    ];
+
+    const bladesGroup = document.getElementById('blades-group');
+    const uiContainer = document.getElementById('ui-container');
+    const statusLabel = document.getElementById('status-label');
+    const btnToggle = document.getElementById('btn-toggle');
+    const marker = document.getElementById('hiro-marker');
+
+    // ตรวจจับเมื่อเจอ Marker ให้แสดง UI
+    marker.addEventListener('markerFound', () => {
+      uiContainer.style.display = 'flex';
+    });
+
+    // เมื่อไม่เจอ Marker ให้ซ่อน UI
+    marker.addEventListener('markerLost', () => {
+      uiContainer.style.display = 'none';
+    });
+
+    // ปุ่ม เปิด / ปิด การทำงานของกังหัน
+    function toggleWindmill() {
+      isRunning = !isRunning;
+
+      if (isRunning) {
+        btnToggle.textContent = 'ปิดกังหัน';
+        btnToggle.classList.remove('off');
+        startRotation();
+      } else {
+        btnToggle.textContent = 'เปิดกังหัน';
+        btnToggle.classList.add('off');
+        stopRotation();
+      }
+
+      updateStatus();
+    }
+
+    // ปุ่ม ปรับความเร็ว
+    function changeSpeed() {
+      currentSpeedIndex = (currentSpeedIndex + 1) % speeds.length;
+
+      if (isRunning) {
+        startRotation();
+      }
+
+      updateStatus();
+    }
+
+    // สั่งหมุนใบพัดกังหัน
+    function startRotation() {
+      bladesGroup.removeAttribute('animation');
+      const dur = speeds[currentSpeedIndex].duration;
+
+      bladesGroup.setAttribute('animation', {
+        property: 'rotation',
+        to: '0 0 -360',
+        from: '0 0 0',
+        loop: true,
+        dur: dur,
+        easing: 'linear'
+      });
+    }
+
+    // สั่งหยุดหมุนใบพัด
+    function stopRotation() {
+      bladesGroup.removeAttribute('animation');
+    }
+
+    // อัปเดตข้อความสถานะ UI
+    function updateStatus() {
+      const stateText = isRunning ? 'กำลังทำงาน' : 'ปิดทำงาน';
+      const speedText = isRunning ? speeds[currentSpeedIndex].name : 'หยุดนิ่ง';
+      statusLabel.textContent = `สถานะ: ${stateText} | ความเร็ว: ${speedText}`;
+    }
+  </script>
+</body>
+</html>
